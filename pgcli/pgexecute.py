@@ -270,19 +270,6 @@ class PGExecute:
         if not self.is_virtual_database():
             register_typecasters(conn)
 
-    @property
-    def short_host(self):
-        try:
-            ipaddress.ip_address(self.host)
-            return self.host
-        except ValueError:
-            pass
-        if "," in self.host:
-            host, _, _ = self.host.partition(",")
-        else:
-            host = self.host
-        short_host, _, _ = host.partition(".")
-        return short_host
 
     def _select_one(self, cur, sql):
         """
@@ -291,8 +278,7 @@ class PGExecute:
         :param sql: string
         :return: string
         """
-        cur.execute(sql)
-        return cur.fetchone()
+        pass
 
     def failed_transaction(self):
         return self.conn.info.transaction_status == psycopg.pq.TransactionStatus.INERROR
@@ -301,18 +287,7 @@ class PGExecute:
         status = self.conn.info.transaction_status
         return status == psycopg.pq.TransactionStatus.ACTIVE or status == psycopg.pq.TransactionStatus.INTRANS
 
-    def is_connection_closed(self):
-        return self.conn.info.transaction_status == psycopg.pq.TransactionStatus.UNKNOWN
 
-    @property
-    def transaction_indicator(self):
-        if self.is_connection_closed():
-            return "?"
-        if self.failed_transaction():
-            return "!"
-        if self.valid_transaction():
-            return "*"
-        return ""
 
     def run(
         self,
@@ -443,13 +418,6 @@ class PGExecute:
 
         title = ""
 
-        def handle_notices(n):
-            nonlocal title
-            title = f"{title}"
-            if n.message_primary is not None:
-                title = f"{title}\n{n.message_primary}"
-            if n.message_detail is not None:
-                title = f"{title}\n{n.message_detail}"
 
         self.conn.add_notice_handler(handle_notices)
 
@@ -532,11 +500,7 @@ class PGExecute:
 
     def schemata(self):
         """Returns a list of schema names in the database"""
-
-        with self.conn.cursor() as cur:
-            _logger.debug("Schemata Query. sql: %r", self.schemata_query)
-            cur.execute(self.schemata_query)
-            return [x[0] for x in cur.fetchall()]
+        pass
 
     def _relations(self, kinds=("r", "p", "f", "v", "m")):
         """Get table or view name metadata
@@ -549,23 +513,18 @@ class PGExecute:
                 'm' - materialized view
         :return: (schema_name, rel_name) tuples
         """
-
-        with self.conn.cursor() as cur:
-            # sql = cur.mogrify(self.tables_query, kinds)
-            # _logger.debug("Tables Query. sql: %r", sql)
-            cur.execute(self.tables_query, [kinds])
-            yield from cur
+        pass
 
     def tables(self):
         """Yields (schema_name, table_name) tuples"""
-        yield from self._relations(kinds=["r", "p", "f"])
+        pass
 
     def views(self):
         """Yields (schema_name, view_name) tuples.
 
         Includes both views and and materialized views
         """
-        yield from self._relations(kinds=["v", "m"])
+        pass
 
     def _columns(self, kinds=("r", "p", "f", "v", "m")):
         """Get column metadata for tables and views
@@ -578,64 +537,10 @@ class PGExecute:
                 'm' - materialized view
         :return: list of (schema_name, relation_name, column_name, column_type) tuples
         """
+        pass
 
-        if self.conn.info.server_version >= 80400:
-            columns_query = """
-                SELECT  nsp.nspname schema_name,
-                        cls.relname table_name,
-                        att.attname column_name,
-                        att.atttypid::regtype::text type_name,
-                        att.atthasdef AS has_default,
-                        pg_catalog.pg_get_expr(def.adbin, def.adrelid, true) as default
-                FROM    pg_catalog.pg_attribute att
-                        INNER JOIN pg_catalog.pg_class cls
-                            ON att.attrelid = cls.oid
-                        INNER JOIN pg_catalog.pg_namespace nsp
-                            ON cls.relnamespace = nsp.oid
-                        LEFT OUTER JOIN pg_attrdef def
-                            ON def.adrelid = att.attrelid
-                            AND def.adnum = att.attnum
-                WHERE   cls.relkind = ANY(%s)
-                        AND NOT att.attisdropped
-                        AND att.attnum  > 0
-                ORDER BY 1, 2, att.attnum"""
-        else:
-            columns_query = """
-                SELECT  nsp.nspname schema_name,
-                        cls.relname table_name,
-                        att.attname column_name,
-                        typ.typname type_name,
-                        NULL AS has_default,
-                        NULL AS default
-                FROM    pg_catalog.pg_attribute att
-                        INNER JOIN pg_catalog.pg_class cls
-                            ON att.attrelid = cls.oid
-                        INNER JOIN pg_catalog.pg_namespace nsp
-                            ON cls.relnamespace = nsp.oid
-                        INNER JOIN pg_catalog.pg_type typ
-                            ON typ.oid = att.atttypid
-                WHERE   cls.relkind = ANY(%s)
-                        AND NOT att.attisdropped
-                        AND att.attnum  > 0
-                ORDER BY 1, 2, att.attnum"""
 
-        with self.conn.cursor() as cur:
-            # sql = cur.mogrify(columns_query, kinds)
-            # _logger.debug("Columns Query. sql: %r", sql)
-            cur.execute(columns_query, [kinds])
-            yield from cur
 
-    def table_columns(self):
-        yield from self._columns(kinds=["r", "p", "f"])
-
-    def view_columns(self):
-        yield from self._columns(kinds=["v", "m"])
-
-    def databases(self):
-        with self.conn.cursor() as cur:
-            _logger.debug("Databases Query. sql: %r", self.databases_query)
-            cur.execute(self.databases_query)
-            return [x[0] for x in cur.fetchall()]
 
     def full_databases(self):
         with self.conn.cursor() as cur:
@@ -660,226 +565,19 @@ class PGExecute:
 
     def foreignkeys(self):
         """Yields ForeignKey named tuples"""
-
-        if self.conn.info.server_version < 90000:
-            return
-
-        with self.conn.cursor() as cur:
-            query = """
-                SELECT s_p.nspname AS parentschema,
-                       t_p.relname AS parenttable,
-                       unnest((
-                        select
-                            array_agg(attname ORDER BY i)
-                        from
-                            (select unnest(confkey) as attnum, generate_subscripts(confkey, 1) as i) x
-                            JOIN pg_catalog.pg_attribute c USING(attnum)
-                            WHERE c.attrelid = fk.confrelid
-                        )) AS parentcolumn,
-                       s_c.nspname AS childschema,
-                       t_c.relname AS childtable,
-                       unnest((
-                        select
-                            array_agg(attname ORDER BY i)
-                        from
-                            (select unnest(conkey) as attnum, generate_subscripts(conkey, 1) as i) x
-                            JOIN pg_catalog.pg_attribute c USING(attnum)
-                            WHERE c.attrelid = fk.conrelid
-                        )) AS childcolumn
-                FROM pg_catalog.pg_constraint fk
-                JOIN pg_catalog.pg_class      t_p ON t_p.oid = fk.confrelid
-                JOIN pg_catalog.pg_namespace  s_p ON s_p.oid = t_p.relnamespace
-                JOIN pg_catalog.pg_class      t_c ON t_c.oid = fk.conrelid
-                JOIN pg_catalog.pg_namespace  s_c ON s_c.oid = t_c.relnamespace
-                WHERE fk.contype = 'f';
-                """
-            _logger.debug("Functions Query. sql: %r", query)
-            cur.execute(query)
-            for row in cur:
-                yield ForeignKey(*row)
+        pass
 
     def functions(self):
         """Yields FunctionMetadata named tuples"""
-
-        if self.conn.info.server_version >= 110000:
-            query = """
-                SELECT n.nspname schema_name,
-                        p.proname func_name,
-                        p.proargnames,
-                        COALESCE(proallargtypes::regtype[], proargtypes::regtype[])::text[],
-                        p.proargmodes,
-                        prorettype::regtype::text return_type,
-                        p.prokind = 'a' is_aggregate,
-                        p.prokind = 'w' is_window,
-                        p.proretset is_set_returning,
-                        d.deptype = 'e' is_extension,
-                        pg_get_expr(proargdefaults, 0) AS arg_defaults
-                FROM pg_catalog.pg_proc p
-                        INNER JOIN pg_catalog.pg_namespace n
-                            ON n.oid = p.pronamespace
-                LEFT JOIN pg_depend d ON d.objid = p.oid and d.deptype = 'e'
-                WHERE p.prorettype::regtype != 'trigger'::regtype
-                ORDER BY 1, 2
-                """
-        elif self.conn.info.server_version > 90000:
-            query = """
-                SELECT n.nspname schema_name,
-                        p.proname func_name,
-                        p.proargnames,
-                        COALESCE(proallargtypes::regtype[], proargtypes::regtype[])::text[],
-                        p.proargmodes,
-                        prorettype::regtype::text return_type,
-                        p.proisagg is_aggregate,
-                        p.proiswindow is_window,
-                        p.proretset is_set_returning,
-                        d.deptype = 'e' is_extension,
-                        pg_get_expr(proargdefaults, 0) AS arg_defaults
-                FROM pg_catalog.pg_proc p
-                        INNER JOIN pg_catalog.pg_namespace n
-                            ON n.oid = p.pronamespace
-                LEFT JOIN pg_depend d ON d.objid = p.oid and d.deptype = 'e'
-                WHERE p.prorettype::regtype != 'trigger'::regtype
-                ORDER BY 1, 2
-                """
-        elif self.conn.info.server_version >= 80400:
-            query = """
-                SELECT n.nspname schema_name,
-                        p.proname func_name,
-                        p.proargnames,
-                        COALESCE(proallargtypes::regtype[], proargtypes::regtype[])::text[],
-                        p.proargmodes,
-                        prorettype::regtype::text,
-                        p.proisagg is_aggregate,
-                        false is_window,
-                        p.proretset is_set_returning,
-                        d.deptype = 'e' is_extension,
-                        NULL AS arg_defaults
-                FROM pg_catalog.pg_proc p
-                        INNER JOIN pg_catalog.pg_namespace n
-                            ON n.oid = p.pronamespace
-                LEFT JOIN pg_depend d ON d.objid = p.oid and d.deptype = 'e'
-                WHERE p.prorettype::regtype != 'trigger'::regtype
-                ORDER BY 1, 2
-                """
-        else:
-            query = """
-                SELECT n.nspname schema_name,
-                        p.proname func_name,
-                        p.proargnames,
-                        NULL arg_types,
-                        NULL arg_modes,
-                        '' ret_type,
-                        p.proisagg is_aggregate,
-                        false is_window,
-                        p.proretset is_set_returning,
-                        d.deptype = 'e' is_extension,
-                        NULL AS arg_defaults
-                FROM pg_catalog.pg_proc p
-                        INNER JOIN pg_catalog.pg_namespace n
-                            ON n.oid = p.pronamespace
-                LEFT JOIN pg_depend d ON d.objid = p.oid and d.deptype = 'e'
-                WHERE p.prorettype::regtype != 'trigger'::regtype
-                ORDER BY 1, 2
-                """
-
-        with self.conn.cursor() as cur:
-            _logger.debug("Functions Query. sql: %r", query)
-            cur.execute(query)
-            for row in cur:
-                yield FunctionMetadata(*row)
+        pass
 
     def datatypes(self):
         """Yields tuples of (schema_name, type_name)"""
-
-        with self.conn.cursor() as cur:
-            if self.conn.info.server_version > 90000:
-                query = """
-                    SELECT n.nspname schema_name,
-                           t.typname type_name
-                    FROM   pg_catalog.pg_type t
-                           INNER JOIN pg_catalog.pg_namespace n
-                              ON n.oid = t.typnamespace
-                    WHERE ( t.typrelid = 0  -- non-composite types
-                            OR (  -- composite type, but not a table
-                                  SELECT c.relkind = 'c'
-                                  FROM pg_catalog.pg_class c
-                                  WHERE c.oid = t.typrelid
-                                )
-                          )
-                          AND NOT EXISTS( -- ignore array types
-                                SELECT  1
-                                FROM    pg_catalog.pg_type el
-                                WHERE   el.oid = t.typelem AND el.typarray = t.oid
-                              )
-                          AND n.nspname <> 'pg_catalog'
-                          AND n.nspname <> 'information_schema'
-                    ORDER BY 1, 2;
-                    """
-            else:
-                query = """
-                    SELECT n.nspname schema_name,
-                      pg_catalog.format_type(t.oid, NULL) type_name
-                    FROM pg_catalog.pg_type t
-                         LEFT JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
-                    WHERE (t.typrelid = 0 OR (SELECT c.relkind = 'c' FROM pg_catalog.pg_class c WHERE c.oid = t.typrelid))
-                      AND t.typname !~ '^_'
-                          AND n.nspname <> 'pg_catalog'
-                          AND n.nspname <> 'information_schema'
-                      AND pg_catalog.pg_type_is_visible(t.oid)
-                    ORDER BY 1, 2;
-                """
-            _logger.debug("Datatypes Query. sql: %r", query)
-            cur.execute(query)
-            yield from cur
+        pass
 
     def casing(self):
         """Yields the most common casing for names used in db functions"""
-        with self.conn.cursor() as cur:
-            query = r"""
-          WITH Words AS (
-                SELECT regexp_split_to_table(prosrc, '\W+') AS Word, COUNT(1)
-                FROM pg_catalog.pg_proc P
-                JOIN pg_catalog.pg_namespace N ON N.oid = P.pronamespace
-                JOIN pg_catalog.pg_language L ON L.oid = P.prolang
-                WHERE L.lanname IN ('sql', 'plpgsql')
-                AND N.nspname NOT IN ('pg_catalog', 'information_schema')
-                GROUP BY Word
-            ),
-            OrderWords AS (
-                SELECT Word,
-                    ROW_NUMBER() OVER(PARTITION BY LOWER(Word) ORDER BY Count DESC)
-                FROM Words
-                WHERE Word ~* '.*[a-z].*'
-            ),
-            Names AS (
-                --Column names
-                SELECT attname AS Name
-                FROM pg_catalog.pg_attribute
-                UNION -- Table/view names
-                SELECT relname
-                FROM pg_catalog.pg_class
-                UNION -- Function names
-                SELECT proname
-                FROM pg_catalog.pg_proc
-                UNION -- Type names
-                SELECT typname
-                FROM pg_catalog.pg_type
-                UNION -- Schema names
-                SELECT nspname
-                FROM pg_catalog.pg_namespace
-                UNION -- Parameter names
-                SELECT unnest(proargnames)
-                FROM pg_proc
-            )
-            SELECT Word
-            FROM OrderWords
-            WHERE LOWER(Word) IN (SELECT Name FROM Names)
-            AND Row_Number = 1;
-            """
-            _logger.debug("Casing Query. sql: %r", query)
-            cur.execute(query)
-            for row in cur:
-                yield row[0]
+        pass
 
     def explain_prefix(self):
         return "EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) "

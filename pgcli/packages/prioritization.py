@@ -36,8 +36,6 @@ class PrevalenceCounter:
                 if token.ttype in Name:
                     self.name_counts[token.value] += 1
 
-    def clear_names(self):
-        self.name_counts = defaultdict(int)
 
     def update_keywords(self, text):
         # Count keywords. Can't rely for sqlparse for this, because it's
@@ -46,8 +44,4 @@ class PrevalenceCounter:
             for _ in regex.finditer(text):
                 self.keyword_counts[keyword] += 1
 
-    def keyword_count(self, keyword):
-        return self.keyword_counts[keyword]
 
-    def name_count(self, name):
-        return self.name_counts[name]

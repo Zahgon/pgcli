@@ -18,16 +18,7 @@ keyring_error_message = dedent(
 
 def keyring_initialize(keyring_enabled, *, logger):
     """Initialize keyring only if explicitly enabled"""
-    global keyring
-
-    if keyring_enabled:
-        # Try best to load keyring (issue #1041).
-        import importlib
-
-        try:
-            keyring = importlib.import_module("keyring")
-        except ModuleNotFoundError as e:  # ImportError for Python 2, ModuleNotFoundError for Python 3
-            logger.warning("import keyring failed: %r.", e)
+    pass
 
 
 def keyring_get_password(key):

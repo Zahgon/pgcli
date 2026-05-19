@@ -23,52 +23,32 @@ def pgcli_bindings(pgcli):
     @kb.add("f2")
     def _(event):
         """Enable/Disable SmartCompletion Mode."""
-        _logger.debug("Detected F2 key.")
-        pgcli.completer.smart_completion = not pgcli.completer.smart_completion
+        pass
 
     @kb.add("f3")
     def _(event):
         """Enable/Disable Multiline Mode."""
-        _logger.debug("Detected F3 key.")
-        pgcli.multi_line = not pgcli.multi_line
+        pass
 
     @kb.add("f4")
     def _(event):
         """Toggle between Vi and Emacs mode."""
-        _logger.debug("Detected F4 key.")
-        pgcli.vi_mode = not pgcli.vi_mode
-        event.app.editing_mode = EditingMode.VI if pgcli.vi_mode else EditingMode.EMACS
+        pass
 
     @kb.add("f5")
     def _(event):
         """Toggle between Vi and Emacs mode."""
-        _logger.debug("Detected F5 key.")
-        pgcli.explain_mode = not pgcli.explain_mode
+        pass
 
     @kb.add("tab")
     def _(event):
         """Force autocompletion at cursor on non-empty lines."""
-
-        _logger.debug("Detected <Tab> key.")
-
-        buff = event.app.current_buffer
-        doc = buff.document
-
-        if doc.on_first_line or doc.current_line.strip():
-            if buff.complete_state:
-                buff.complete_next()
-            else:
-                buff.start_completion(select_first=True)
-        else:
-            buff.insert_text(tab_insert_text, fire_event=False)
+        pass
 
     @kb.add("escape", filter=has_completions)
     def _(event):
         """Force closing of autocompletion."""
-        _logger.debug("Detected <Esc> key.")
-
-        event.current_buffer.complete_state = None
-        event.app.current_buffer.complete_state = None
+        pass
 
     @kb.add("c-space")
     def _(event):
@@ -80,13 +60,7 @@ def pgcli_bindings(pgcli):
 
         If the menu is showing, select the next completion.
         """
-        _logger.debug("Detected <C-Space> key.")
-
-        b = event.app.current_buffer
-        if b.complete_state:
-            b.complete_next()
-        else:
-            b.start_completion(select_first=False)
+        pass
 
     @kb.add("enter", filter=completion_is_selected)
     def _(event):
@@ -97,36 +71,25 @@ def pgcli_bindings(pgcli):
         (accept current selection).
 
         """
-        _logger.debug("Detected enter key during completion selection.")
-
-        event.current_buffer.complete_state = None
-        event.app.current_buffer.complete_state = None
+        pass
 
     # When using multi_line input mode the buffer is not handled on Enter (a new line is
     # inserted instead), so we force the handling if we're not in a completion or
     # history search, and one of several conditions are True
-    @kb.add(
-        "enter",
-        filter=~(completion_is_selected | is_searching) & buffer_should_be_handled(pgcli),
-    )
-    def _(event):
-        _logger.debug("Detected enter key.")
-        event.current_buffer.validate_and_handle()
 
     @kb.add("escape", "enter", filter=~vi_mode & ~safe_multi_line_mode(pgcli))
     def _(event):
         """Introduces a line break regardless of multi-line mode or not."""
-        _logger.debug("Detected alt-enter key.")
-        event.app.current_buffer.insert_text("\n")
+        pass
 
     @kb.add("c-p", filter=~has_selection)
     def _(event):
         """Move up in history."""
-        event.current_buffer.history_backward(count=event.arg)
+        pass
 
     @kb.add("c-n", filter=~has_selection)
     def _(event):
         """Move down in history."""
-        event.current_buffer.history_forward(count=event.arg)
+        pass
 
     return kb

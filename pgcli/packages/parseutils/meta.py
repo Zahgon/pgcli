@@ -24,28 +24,7 @@ TableMetadata = namedtuple("TableMetadata", "name columns")
 def parse_defaults(defaults_string):
     """Yields default values for a function, given the string provided by
     pg_get_expr(pg_catalog.pg_proc.proargdefaults, 0)"""
-    if not defaults_string:
-        return
-    current = ""
-    in_quote = None
-    for char in defaults_string:
-        if current == "" and char == " ":
-            # Skip space after comma separating default expressions
-            continue
-        if char == '"' or char == "'":
-            if in_quote and char == in_quote:
-                # End quote
-                in_quote = None
-            elif not in_quote:
-                # Begin quote
-                in_quote = char
-        elif char == "," and not in_quote:
-            # End of expression
-            yield current
-            current = ""
-            continue
-        current += char
-    yield current
+    pass
 
 
 class FunctionMetadata:
@@ -98,20 +77,6 @@ class FunctionMetadata:
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def _signature(self):
-        return (
-            self.schema_name,
-            self.func_name,
-            self.arg_names,
-            self.arg_types,
-            self.arg_modes,
-            self.return_type,
-            self.is_aggregate,
-            self.is_window,
-            self.is_set_returning,
-            self.is_extension,
-            self.arg_defaults,
-        )
 
     def __hash__(self):
         return hash(self._signature())
@@ -123,42 +88,11 @@ class FunctionMetadata:
             "is_window=%r, is_set_returning=%r, is_extension=%r, arg_defaults=%r)"
         ) % ((self.__class__.__name__,) + self._signature())
 
-    def has_variadic(self):
-        return self.arg_modes and any(arg_mode == "v" for arg_mode in self.arg_modes)
 
     def args(self):
         """Returns a list of input-parameter ColumnMetadata namedtuples."""
-        if not self.arg_names:
-            return []
-        modes = self.arg_modes or ["i"] * len(self.arg_names)
-        args = [
-            (name, typ)
-            for name, typ, mode in zip(self.arg_names, self.arg_types, modes)
-            if mode in ("i", "b", "v")  # IN, INOUT, VARIADIC
-        ]
-
-        def arg(name, typ, num):
-            num_args = len(args)
-            num_defaults = len(self.arg_defaults)
-            has_default = num + num_defaults >= num_args
-            default = self.arg_defaults[num - num_args + num_defaults] if has_default else None
-            return ColumnMetadata(name, typ, [], default, has_default)
-
-        return [arg(name, typ, num) for num, (name, typ) in enumerate(args)]
+        pass
 
     def fields(self):
         """Returns a list of output-field ColumnMetadata namedtuples"""
-
-        if self.return_type.lower() == "void":
-            return []
-        elif not self.arg_modes:
-            # For functions  without output parameters, the function name
-            # is used as the name of the output column.
-            # E.g. 'SELECT unnest FROM unnest(...);'
-            return [ColumnMetadata(self.func_name, self.return_type, [])]
-
-        return [
-            ColumnMetadata(name, typ, [])
-            for name, typ, mode in zip(self.arg_names, self.arg_types, self.arg_modes)
-            if mode in ("o", "b", "t")
-        ]  # OUT, INOUT, TABLE
+        pass

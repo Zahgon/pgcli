@@ -44,9 +44,6 @@ def write_default_config(source, destination, overwrite=False):
     shutil.copyfile(source, destination)
 
 
-def upgrade_config(config, def_config):
-    cfg = load_config(config, def_config)
-    cfg.write()
 
 
 def get_config_filename(pgclirc_file=None):

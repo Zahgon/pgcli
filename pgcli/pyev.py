@@ -412,6 +412,3 @@ class Visualizer:
     def get_list(self):
         return "\n".join(self.string_lines)
 
-    def print(self):
-        for lin in self.string_lines:
-            print(lin)

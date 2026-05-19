@@ -23,36 +23,10 @@ mode, which by default will insert new lines on Enter.
 
 
 def safe_multi_line_mode(pgcli):
-    @Condition
-    def cond():
-        _logger.debug('Multi-line mode state: "%s" / "%s"', pgcli.multi_line, pgcli.multiline_mode)
-        return pgcli.multi_line and (pgcli.multiline_mode == "safe")
 
     return cond
 
 
 def buffer_should_be_handled(pgcli):
-    @Condition
-    def cond():
-        if not pgcli.multi_line:
-            _logger.debug("Not in multi-line mode. Handle the buffer.")
-            return True
-
-        if pgcli.multiline_mode == "safe":
-            _logger.debug("Multi-line mode is set to 'safe'. Do NOT handle the buffer.")
-            return False
-
-        doc = get_app().layout.get_buffer_by_name(DEFAULT_BUFFER).document
-        text = doc.text.strip()
-
-        return (
-            text.startswith("\\")
-            or text.endswith((r"\e", r"\G"))
-            or _is_complete(text)
-            or text == "exit"
-            or text == "quit"
-            or text == ":q"
-            or text == ""  # Just a plain enter without any text
-        )
 
     return cond

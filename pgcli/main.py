@@ -148,26 +148,6 @@ class PGCli:
     default_prompt = "\\u@\\h:\\d> "
     max_len_prompt = 30
 
-    def set_default_pager(self, config):
-        configured_pager = config["main"].get("pager")
-        os_environ_pager = os.environ.get("PAGER")
-
-        if configured_pager:
-            self.logger.info('Default pager found in config file: "%s"', configured_pager)
-            os.environ["PAGER"] = configured_pager
-        elif os_environ_pager:
-            self.logger.info(
-                'Default pager found in PAGER environment variable: "%s"',
-                os_environ_pager,
-            )
-            os.environ["PAGER"] = os_environ_pager
-        else:
-            self.logger.info("No default pager found in environment. Using os default pager")
-
-        # Set default set of less recommended options, if they are not already set.
-        # They are ignored if pager is different than less.
-        if not os.environ.get("LESS"):
-            os.environ["LESS"] = "-SRXF"
 
     def __init__(
         self,
@@ -312,291 +292,24 @@ class PGCli:
 
     def toggle_named_query_quiet(self):
         """Toggle hiding of named query text"""
-        self.hide_named_query_text = not self.hide_named_query_text
-        status = "ON" if self.hide_named_query_text else "OFF"
-        message = f"Named query quiet mode: {status}"
-        return [(None, None, None, message)]
+        pass
 
     def _is_named_query_execution(self, text):
         """Check if the command is a named query execution (\n <name>)."""
         text = text.strip()
         return text.startswith("\\n ") and not text.startswith("\\ns ") and not text.startswith("\\nd ")
 
-    def register_special_commands(self):
-        self.pgspecial.register(
-            self.toggle_named_query_quiet,
-            "\\nq",
-            "\\nq",
-            "Toggle named query quiet mode (hide query text)",
-            arg_type=NO_QUERY,
-            case_sensitive=True,
-        )
 
-        self.pgspecial.register(
-            self.change_db,
-            "\\c",
-            "\\c[onnect] database_name",
-            "Change to a new database.",
-            aliases=("use", "\\connect", "USE"),
-        )
-
-        def refresh_callback():
-            return self.refresh_completions(persist_priorities="all")
-
-        self.pgspecial.register(
-            self.quit,
-            "\\q",
-            "\\q",
-            "Quit pgcli.",
-            arg_type=NO_QUERY,
-            case_sensitive=True,
-            aliases=(":q",),
-        )
-        self.pgspecial.register(
-            self.quit,
-            "quit",
-            "quit",
-            "Quit pgcli.",
-            arg_type=NO_QUERY,
-            case_sensitive=False,
-            aliases=("exit",),
-        )
-        self.pgspecial.register(
-            refresh_callback,
-            "\\#",
-            "\\#",
-            "Refresh auto-completions.",
-            arg_type=NO_QUERY,
-        )
-        self.pgspecial.register(
-            refresh_callback,
-            "\\refresh",
-            "\\refresh",
-            "Refresh auto-completions.",
-            arg_type=NO_QUERY,
-        )
-        self.pgspecial.register(self.execute_from_file, "\\i", "\\i filename", "Execute commands from file.")
-        self.pgspecial.register(
-            self.write_to_file,
-            "\\o",
-            "\\o [filename]",
-            "Send all query results to file.",
-        )
-        self.pgspecial.register(
-            self.write_to_logfile,
-            "\\log-file",
-            "\\log-file [filename]",
-            "Log all query results to a logfile, in addition to the normal output destination.",
-        )
-        self.pgspecial.register(self.info_connection, "\\conninfo", "\\conninfo", "Get connection details")
-        self.pgspecial.register(
-            self.change_table_format,
-            "\\T",
-            "\\T [format]",
-            "Change the table format used to output results",
-        )
-
-        self.pgspecial.register(
-            self.echo,
-            "\\echo",
-            "\\echo [string]",
-            "Echo a string to stdout",
-        )
-
-        self.pgspecial.register(
-            self.echo,
-            "\\qecho",
-            "\\qecho [string]",
-            "Echo a string to the query output channel.",
-        )
-
-        self.pgspecial.register(
-            self.toggle_verbose_errors,
-            "\\v",
-            "\\v [on|off]",
-            "Toggle verbose errors.",
-        )
-
-    def toggle_verbose_errors(self, pattern, **_):
-        flag = pattern.strip()
-
-        if flag == "on":
-            self.verbose_errors = True
-        elif flag == "off":
-            self.verbose_errors = False
-        else:
-            self.verbose_errors = not self.verbose_errors
-
-        message = "Verbose errors " + "on." if self.verbose_errors else "off."
-        return [(None, None, None, message)]
 
     def echo(self, pattern, **_):
         return [(None, None, None, pattern)]
 
-    def change_table_format(self, pattern, **_):
-        try:
-            if pattern not in TabularOutputFormatter().supported_formats:
-                raise ValueError()
-            self.table_format = pattern
-            yield (None, None, None, f"Changed table format to {pattern}")
-        except ValueError:
-            msg = f"Table format {pattern} not recognized. Allowed formats:"
-            for table_type in TabularOutputFormatter().supported_formats:
-                msg += f"\n\t{table_type}"
-            msg += "\nCurrently set to: %s" % self.table_format
-            yield (None, None, None, msg)
 
-    def info_connection(self, **_):
-        if self.pgexecute.host.startswith("/"):
-            host = 'socket "%s"' % self.pgexecute.host
-        else:
-            host = 'host "%s"' % self.pgexecute.host
 
-        yield (
-            None,
-            None,
-            None,
-            'You are connected to database "%s" as user '
-            '"%s" on %s at port "%s".' % (self.pgexecute.dbname, self.pgexecute.user, host, self.pgexecute.port),
-        )
 
-    def change_db(self, pattern, **_):
-        if pattern:
-            # Get all the parameters in pattern, handling double quotes if any.
-            infos = re.findall(r'"[^"]*"|[^"\'\s]+', pattern)
-            # Now removing quotes.
-            [s.strip('"') for s in infos]
 
-            infos.extend([None] * (4 - len(infos)))
-            db, user, host, port = infos
-            try:
-                self.pgexecute.connect(
-                    database=db,
-                    user=user,
-                    host=host,
-                    port=port,
-                    **self.pgexecute.extra_args,
-                )
-            except OperationalError as e:
-                click.secho(str(e), err=True, fg="red")
-                click.echo("Previous connection kept")
-        else:
-            self.pgexecute.connect()
 
-        yield (
-            None,
-            None,
-            None,
-            'You are now connected to database "%s" as user "%s"' % (self.pgexecute.dbname, self.pgexecute.user),
-        )
 
-    def execute_from_file(self, pattern, **_):
-        if not pattern:
-            message = "\\i: missing required argument"
-            return [(None, None, None, message, "", False, True)]
-        try:
-            with open(os.path.expanduser(pattern), encoding="utf-8") as f:
-                query = f.read()
-        except OSError as e:
-            return [(None, None, None, str(e), "", False, True)]
-
-        if self.destructive_warning:
-            if (
-                self.destructive_statements_require_transaction
-                and not self.pgexecute.valid_transaction()
-                and is_destructive(query, self.destructive_warning)
-            ):
-                message = "Destructive statements must be run within a transaction. Command execution stopped."
-                return [(None, None, None, message)]
-            destroy = confirm_destructive_query(query, self.destructive_warning, self.dsn_alias)
-            if destroy is False:
-                message = "Wise choice. Command execution stopped."
-                return [(None, None, None, message)]
-
-        on_error_resume = self.on_error == "RESUME"
-        return self.pgexecute.run(
-            query,
-            self.pgspecial,
-            on_error_resume=on_error_resume,
-            explain_mode=self.explain_mode,
-        )
-
-    def write_to_logfile(self, pattern, **_):
-        if not pattern:
-            self.log_file = None
-            message = "Logfile capture disabled"
-            return [(None, None, None, message, "", True, True)]
-
-        log_file = pathlib.Path(pattern).expanduser().absolute()
-
-        try:
-            with open(log_file, "a+"):
-                pass  # ensure writeable
-        except OSError as e:
-            self.log_file = None
-            message = str(e) + "\nLogfile capture disabled"
-            return [(None, None, None, message, "", False, True)]
-
-        self.log_file = str(log_file)
-        message = 'Writing to file "%s"' % self.log_file
-        return [(None, None, None, message, "", True, True)]
-
-    def write_to_file(self, pattern, **_):
-        if not pattern:
-            self.output_file = None
-            message = "File output disabled"
-            return [(None, None, None, message, "", True, True)]
-        filename = os.path.abspath(os.path.expanduser(pattern))
-        if not os.path.isfile(filename):
-            try:
-                open(filename, "w").close()
-            except OSError as e:
-                self.output_file = None
-                message = str(e) + "\nFile output disabled"
-                return [(None, None, None, message, "", False, True)]
-        self.output_file = filename
-        message = 'Writing to file "%s"' % self.output_file
-        return [(None, None, None, message, "", True, True)]
-
-    def initialize_logging(self):
-        log_file = self.config["main"]["log_file"]
-        if log_file == "default":
-            log_file = config_location() + "log"
-        ensure_dir_exists(log_file)
-        log_level = self.config["main"]["log_level"]
-
-        # Disable logging if value is NONE by switching to a no-op handler.
-        # Set log level to a high value so it doesn't even waste cycles getting called.
-        if log_level.upper() == "NONE":
-            handler = logging.NullHandler()
-        else:
-            handler = logging.FileHandler(os.path.expanduser(log_file))
-
-        level_map = {
-            "CRITICAL": logging.CRITICAL,
-            "ERROR": logging.ERROR,
-            "WARNING": logging.WARNING,
-            "INFO": logging.INFO,
-            "DEBUG": logging.DEBUG,
-            "NONE": logging.CRITICAL,
-        }
-
-        log_level = level_map[log_level.upper()]
-
-        formatter = logging.Formatter("%(asctime)s (%(process)d/%(threadName)s) %(name)s %(levelname)s - %(message)s")
-
-        handler.setFormatter(formatter)
-
-        root_logger = logging.getLogger("pgcli")
-        root_logger.addHandler(handler)
-        root_logger.setLevel(log_level)
-
-        root_logger.debug("Initializing pgcli logging.")
-        root_logger.debug("Log file %r.", log_file)
-
-        pgspecial_logger = logging.getLogger("pgspecial")
-        pgspecial_logger.addHandler(handler)
-        pgspecial_logger.setLevel(log_level)
 
     def connect_dsn(self, dsn, **kwargs):
         self.connect(dsn=dsn, **kwargs)
@@ -1037,23 +750,7 @@ class PGCli:
     def _build_cli(self, history):
         key_bindings = pgcli_bindings(self)
 
-        def get_message():
-            if self.dsn_alias and self.prompt_dsn_format is not None:
-                prompt_format = self.prompt_dsn_format
-            else:
-                prompt_format = self.prompt_format
 
-            prompt = self.get_prompt(prompt_format)
-
-            if prompt_format == self.default_prompt and len(prompt) > self.max_len_prompt:
-                prompt = self.get_prompt("\\d> ")
-
-            prompt = prompt.replace("\\x1b", "\x1b")
-            return ANSI(prompt)
-
-        def get_continuation(width, line_number, is_soft_wrap):
-            continuation = self.multiline_continuation_char * (width - 1) + " "
-            return [("class:continuation", continuation)]
 
         get_toolbar_tokens = create_toolbar_tokens_func(self)
 
@@ -1259,13 +956,6 @@ class PGCli:
             settings=self.settings,
         )
 
-    def _on_completions_refreshed(self, new_completer, persist_priorities):
-        self._swap_completer_objects(new_completer, persist_priorities)
-
-        if self.prompt_app:
-            # After refreshing, redraw the CLI to clear the statusbar
-            # "Refreshing completions..." indicator
-            self.prompt_app.app.invalidate()
 
     def _swap_completer_objects(self, new_completer, persist_priorities):
         """Swap the completer object with the newly created completer.
@@ -1282,22 +972,7 @@ class PGCli:
                        priorities, but not any other.
 
         """
-        with self._completer_lock:
-            old_completer = self.completer
-            self.completer = new_completer
-
-            if persist_priorities == "all":
-                # Just swap over the entire prioritizer
-                new_completer.prioritizer = old_completer.prioritizer
-            elif persist_priorities == "keywords":
-                # Swap over the entire prioritizer, but clear name priorities,
-                # leaving learned keyword priorities alone
-                new_completer.prioritizer = old_completer.prioritizer
-                new_completer.prioritizer.clear_names()
-            elif persist_priorities == "none":
-                # Leave the new prioritizer as is
-                pass
-            self.completer = new_completer
+        pass
 
     def get_completions(self, text, cursor_positition):
         with self._completer_lock:
@@ -1872,12 +1547,6 @@ def format_output(title, cur, headers, status, settings, explain_mode=False):
             return val
         return "{" + ",".join(str(format_array(e)) for e in val) + "}"
 
-    def format_arrays(data, headers, **_):
-        data = list(data)
-        for row in data:
-            row[:] = [format_array(val) if isinstance(val, list) else val for val in row]
-
-        return data, headers
 
     def format_status(cur, status):
         # redshift does not return rowcount as part of status.
